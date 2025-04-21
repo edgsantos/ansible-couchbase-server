@@ -37,7 +37,7 @@
       statement: |
         {{ item.definition }} WITH {
           {% if item.num_replicas is defined and item.num_replicas is number %}
-            "num_replicas": {{ item.num_replicas }},
+            "num_replica": {{ item.num_replicas }},
           {% endif %}
           {% if item.num_partitions is defined and item.num_partitions is number %}
             "num_partitions": {{ item.num_partitions }},
