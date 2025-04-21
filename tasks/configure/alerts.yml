@@ -1,11 +1,10 @@
 ---
 # Docs: https://docs.couchbase.com/server/current/cli/cbcli/couchbase-cli-setting-alert.html
 - name: Enable the Couchbase Alerts Settings with username and password
-  no_log: true
   shell:
     cmd: |
       /opt/couchbase/bin/couchbase-cli setting-alert \
-        --cluster {{ inventory_hostname }} \
+        --cluster {{ couchbase_master }} \
         --username {{ couchbase_security.admin_user | default('Administrator') }} \
         --password '{{ couchbase_security.admin_password | default('password') }}' \
         {% if couchbase_email_alerts.enabled | default(false) %}
@@ -31,7 +30,7 @@
           --enable-email-encrypt {{ couchbase_email_alerts.encrypt | default(false) | int }} \
         {% endif %}
         --enable-email-alert {{ couchbase_email_alerts.enabled | default(false) | int }}
-  when: couchbase_master is defined and couchbase_master == inventory_hostname
+  when: couchbase_master is defined and couchbase_master == lookup('vars', couchbase_hostname_var)
   tags:
     - couchbase_configure
     - couchbase_alerts

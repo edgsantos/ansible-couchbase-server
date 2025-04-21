@@ -1,8 +1,7 @@
 ---
 - name: Get all of the nodes in the cluster
-  no_log: true
   uri:
-    url: "http://{{ inventory_hostname }}:{{ couchbase_cluster.port | default(8091) }}/pools/nodes"
+    url: "http://{{ lookup('vars', couchbase_hostname_var) }}:{{ couchbase_cluster.port | default(8091) }}/pools/nodes"
     url_username: "{{ couchbase_security.admin_user | default('Administrator') }}"
     url_password: "{{ couchbase_security.admin_password | default('password') }}"
     method: GET
@@ -24,8 +23,9 @@
     - couchbase_configure
     - couchbase_indexes
 
+# Conflict. There is an attempt to create an object (keyspace or index) that already exists.
+# Source: https://docs.couchbase.com/server/current/n1ql-rest-query/index.html#get_service-responses
 - name: Create Indexes
-  no_log: true
   uri:
     url: "http://{{ query_nodes | random }}:8093/query/service"
     url_username: "{{ couchbase_security.admin_user | default('Administrator') }}"
@@ -37,7 +37,7 @@
       statement: |
         {{ item.definition }} WITH {
           {% if item.num_replicas is defined and item.num_replicas is number %}
-            "num_replica": {{ item.num_replicas }},
+            "num_replicas": {{ item.num_replicas }},
           {% endif %}
           {% if item.num_partitions is defined and item.num_partitions is number %}
             "num_partitions": {{ item.num_partitions }},
@@ -60,7 +60,7 @@
           {% if item.resident_ratio is defined and item.resident_ratio is number %}
             "residentRatio": {{ item.resident_ratio }},
           {% endif %}
-          "defer_build": {% if couchbase_server_version is version_compare('6.5', '>=') %} true {% else %} false {% endif %}
+          "defer_build": {% if (cb_server_version | default(couchbase_server_version)) is version_compare('6.5', '>=') %} true {% else %} false {% endif %}
         }
   with_items: "{{ couchbase_indexes }}"
   when: couchbase_master is defined and query_nodes | length > 0
@@ -73,7 +73,6 @@
     - '"already exists" not in result.json.errors[0].msg'
 
 - name: Build the indexes on each of the buckets
-  no_log: true
   uri:
     url: "http://{{ query_nodes | random }}:8093/query/service"
     url_username: "{{ couchbase_security.admin_user | default('Administrator') }}"
@@ -92,7 +91,7 @@
           )
         )
   loop: "{{ couchbase_indexes | selectattr('bucket', 'defined') | map(attribute='bucket') | list | unique }}"
-  when: couchbase_master is defined and couchbase_server_version is version_compare('6.5', '>=') and query_nodes | length > 0
+  when: couchbase_master is defined and (cb_server_version | default(couchbase_server_version)) is version_compare('6.5', '>=') and query_nodes | length > 0
   tags:
     - couchbase_configure
     - couchbase_indexes

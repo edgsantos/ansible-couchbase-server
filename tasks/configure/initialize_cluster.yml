@@ -1,16 +1,24 @@
 ---
 # Docs: https://docs.couchbase.com/server/current/cli/cbcli/couchbase-cli-cluster-init.html
+- name: Set the services for cluster initialization
+  set_fact:
+    init_services_csv: "{{ couchbase_nodes | selectattr('hostname', 'equalto', lookup('vars', couchbase_hostname_var) ) | map(attribute='services') | flatten | join(',') }}"
+  when: couchbase_master is defined and couchbase_master == lookup('vars', couchbase_hostname_var)
+
+- debug:
+    var: init_services_csv
+  when: couchbase_master is defined and couchbase_master == lookup('vars', couchbase_hostname_var)
+
 - name: Initialize the Cluster
-  no_log: true
   shell:
     cmd: |
       if /opt/couchbase/bin/couchbase-cli setting-cluster \
-        --cluster {{ inventory_hostname }} \
+        --cluster {{ couchbase_master }} \
         --username {{ couchbase_security.admin_user | default('Administrator') }} \
         --password '{{ couchbase_security.admin_password | default('password') }}' | \
         grep -q 'ERROR: Cluster is not initialized'; then
         /opt/couchbase/bin/couchbase-cli cluster-init \
-          --cluster {{ inventory_hostname }} \
+          --cluster {{ couchbase_master }} \
           --cluster-username {{ couchbase_security.admin_user | default('Administrator') }} \
           --cluster-password '{{ couchbase_security.admin_password | default('password') }}' \
           --cluster-port {{ couchbase_cluster.port | default(8091) }} \
@@ -21,12 +29,8 @@
           --cluster-analytics-ramsize {{ couchbase_memory_quotas.analytics | default(1024) }} \
           --cluster-name '{{ couchbase_cluster.name | default('My Cluster') }}' \
           --index-storage-setting {{ couchbase_cluster.index_storage | default('default') }} \
-          --services '{{ item.services is defined |
-            ternary(item.services, couchbase_cluster.default_services |
-            default(['data','index','query'])) |
-            join(',') }}'
+          --services '{{ init_services_csv | default('data,index,query') }}'
       else
         echo "Already initialized"
       fi
-  loop: "{{ couchbase_nodes }}"
-  when: couchbase_master is defined and couchbase_master == inventory_hostname and couchbase_master == item.hostname
+  when: couchbase_master is defined and couchbase_master == lookup('vars', couchbase_hostname_var)

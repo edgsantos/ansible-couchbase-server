@@ -1,6 +1,5 @@
 ---
 - name: Wait for Couchbase on all hosts in cluster to come up
-  no_log: true
   uri:
     url: "http://{{ item.hostname }}:8091/pools"
     method: GET
@@ -11,4 +10,4 @@
   retries: 60
   delay: 1
   with_items: "{{ couchbase_nodes }}"
-  when: couchbase_master is defined and couchbase_master == inventory_hostname
+  when: couchbase_master is defined and couchbase_master == lookup('vars', couchbase_hostname_var)

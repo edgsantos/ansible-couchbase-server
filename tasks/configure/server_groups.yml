@@ -1,11 +1,10 @@
 ---
 # Docs: https://docs.couchbase.com/server/current/cli/cbcli/couchbase-cli-group-manage.html
 - name: Create Server Groups
-  no_log: true
   shell:
     cmd: |
       if /opt/couchbase/bin/couchbase-cli group-manage \
-        --cluster {{ inventory_hostname }} \
+        --cluster {{ couchbase_master }} \
         --username {{ couchbase_security.admin_user | default('Administrator') }} \
         --password '{{ couchbase_security.admin_password | default('password') }}' \
         --list | \
@@ -13,60 +12,134 @@
           echo "The group already exists"
       else
         /opt/couchbase/bin/couchbase-cli group-manage \
-          --cluster {{ inventory_hostname }} \
+          --cluster {{ couchbase_master }} \
           --username {{ couchbase_security.admin_user | default('Administrator') }} \
           --password '{{ couchbase_security.admin_password | default('password') }}' \
           --group-name '{{ item }}' \
           --create
       fi
-  when: couchbase_master is defined and couchbase_master == inventory_hostname
+  when: couchbase_master is defined and couchbase_master == lookup('vars', couchbase_hostname_var)
   loop: "{{ couchbase_nodes | selectattr('group', 'defined') | map(attribute='group') | list | unique }}"
   tags:
     - couchbase_configure
     - couchbase_server_groups
 
-- name: Assign Nodes to Groups
-  no_log: true
-  shell:
-    cmd: |
-      /opt/couchbase/bin/couchbase-cli group-manage \
-        --cluster {{ inventory_hostname }} \
-        --username {{ couchbase_security.admin_user | default('Administrator') }} \
-        --password '{{ couchbase_security.admin_password | default('password') }}' \
-        --move-servers '{{ item.hostname }}' \
-        --from-group 'Group 1' \
-        --to-group '{{ item.group }}'
-  when: couchbase_master is defined and couchbase_master == inventory_hostname
-  loop: "{{ couchbase_nodes | selectattr('group', 'defined') | list }}"
-  tags:
-    - couchbase_configure
-    - couchbase_server_groups
-  register: result
-  failed_when:
-    - result.rc == 1
-    - '"not found" not in result.stdout'
-
-- name: Remove Default Group ('Group 1') if not used
-  no_log: true
-  shell:
-    cmd: |
-      if /opt/couchbase/bin/couchbase-cli group-manage \
-        --cluster {{ inventory_hostname }} \
-        --username {{ couchbase_security.admin_user | default('Administrator') }} \
-        --password '{{ couchbase_security.admin_password | default('password') }}' \
-        --list | \
-        grep -q 'Group 1'; then
+- name: Manage Couchbase Groups
+  block:
+    - name: Get current group mappings
+      shell: |
         /opt/couchbase/bin/couchbase-cli group-manage \
-          --cluster {{ inventory_hostname }} \
+          --cluster {{ couchbase_master }} \
           --username {{ couchbase_security.admin_user | default('Administrator') }} \
           --password '{{ couchbase_security.admin_password | default('password') }}' \
-          --group-name 'Group 1' \
-          --delete
-      fi
-  when: couchbase_master is defined and
-    couchbase_master == inventory_hostname and
-    (couchbase_nodes | selectattr('group', 'defined') | list | count > 0) and
-    (couchbase_nodes | selectattr('group', 'defined') | selectattr('group', 'match', 'Group 1') | list | count == 0)
-  tags:
-    - couchbase_configure
-    - couchbase_server_groups
+          --list
+      register: couchbase_groups_raw
+      tags:
+        - couchbase_configure
+        - couchbase_groups
+
+    - name: debug var
+      ansible.builtin.debug:
+        var: couchbase_groups_raw
+
+    - name: Parse current groups from output
+      set_fact:
+        couchbase_group_memberships: >-
+          {%- set groups = [] -%}
+          {%- set ns = namespace(current_group=None) -%}
+          {%- for line in couchbase_groups_raw.stdout_lines -%}
+            {%- set line = line.strip() -%}
+            {%- if line.startswith('server:') -%}
+              {%- set host = line.split(':')[1].strip() -%}
+              {%- set _ = groups.append({"hostname": host, "current_group": ns.current_group}) -%}
+            {%- elif line != '' -%}
+              {%- set ns.current_group = line -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ groups }}
+      tags:
+        - couchbase_configure
+        - couchbase_groups
+
+    - name: Merge desired groups into current group structure
+      set_fact:
+        merged_couchbase_nodes: "{{ couchbase_nodes | community.general.lists_mergeby(couchbase_group_memberships, 'hostname', list_merge='append') }}"
+      tags:
+        - couchbase_configure
+        - couchbase_groups
+
+    - name: Move nodes to target groups if needed
+      shell: 
+        cmd: |
+          /opt/couchbase/bin/couchbase-cli group-manage \
+            --cluster {{ couchbase_master }} \
+            --username {{ couchbase_security.admin_user | default('Administrator') }} \
+            --password '{{ couchbase_security.admin_password | default('password') }}' \
+            --move-servers '{{ item.hostname }}' \
+            --from-group '{{ item.current_group }}' \
+            --to-group '{{ item.group }}'
+      loop: "{{ merged_couchbase_nodes }}"
+      when:
+        - item.group is defined 
+        - item.group | length > 0
+        - item.current_group is defined 
+        - item.current_group | length > 0
+        - item.group != item.current_group
+      tags:
+        - couchbase_configure
+        - couchbase_groups
+
+    - name: Refresh group list after moving nodes
+      shell: 
+        cmd: |
+          /opt/couchbase/bin/couchbase-cli group-manage \
+            --cluster {{ couchbase_master }} \
+            --username {{ couchbase_security.admin_user | default('Administrator') }} \
+            --password '{{ couchbase_security.admin_password | default('password') }}' \
+            --list
+      register: refreshed_couchbase_groups_raw
+      tags:
+        - couchbase_configure
+        - couchbase_groups
+
+# Safeguard to avoid deleting groups with machines
+    - name: Parse refreshed groups (all existing groups)
+      set_fact:
+        refreshed_couchbase_groups: >-
+          {%- set groups = [] -%}
+          {%- for line in refreshed_couchbase_groups_raw.stdout_lines -%}
+            {%- set line = line.strip() -%}
+            {%- if line != '' and not line.startswith('server:') -%}
+              {%- set _ = groups.append(line) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ groups }}
+      tags:
+        - couchbase_configure
+        - couchbase_groups
+
+    - name: Identify groups to delete
+      set_fact:
+        unused_couchbase_groups: "{{ refreshed_couchbase_groups | difference(merged_couchbase_nodes | map(attribute='group') | list) }}"
+      tags:
+        - couchbase_configure
+        - couchbase_groups
+
+    - name: Remove unused groups
+      shell: 
+        cmd: |
+          /opt/couchbase/bin/couchbase-cli group-manage \
+            --cluster {{ couchbase_master }} \
+            --username {{ couchbase_security.admin_user | default('Administrator') }} \
+            --password '{{ couchbase_security.admin_password | default('password') }}' \
+            --group-name '{{ item }}' \
+            --delete
+      loop: "{{ unused_couchbase_groups }}"
+      when: unused_couchbase_groups | length > 0
+      tags:
+        - couchbase_configure
+        - couchbase_groups
+
+  when: 
+    - couchbase_master is defined
+    - couchbase_master == lookup('vars', couchbase_hostname_var)

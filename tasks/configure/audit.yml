@@ -1,11 +1,10 @@
 ---
 # Docs: https://docs.couchbase.com/server/current/cli/cbcli/couchbase-cli-setting-audit.html
 - name: Set the Couchbase Audit Configuration
-  no_log: true
   shell:
     cmd: |
       /opt/couchbase/bin/couchbase-cli setting-audit \
-        --cluster {{ inventory_hostname }} \
+        --cluster {{ couchbase_master }} \
         --username {{ couchbase_security.admin_user | default('Administrator') }} \
         --password '{{ couchbase_security.admin_password | default('password') }}' \
         --audit-enabled {{ couchbase_audit.enabled | default(true) | int }} \
@@ -13,7 +12,7 @@
         --audit-log-rotate-size {{ couchbase_audit.log_rotate_size | default(20971520) | int }} \
         --audit-log-path '{{ couchbase_audit.log_path | default('/opt/couchbase/var/lib/couchbase/logs') }}' \
         --set
-  when: couchbase_master is defined and couchbase_master == inventory_hostname and couchbase_server_edition == "enterprise"
+  when: couchbase_master is defined and couchbase_master == lookup('vars', couchbase_hostname_var) and couchbase_server_edition == "enterprise"
   tags:
     - couchbase_configure
     - couchbase_audit

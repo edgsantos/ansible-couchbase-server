@@ -8,7 +8,7 @@
     - couchbase_debug
 
 - name: Preflight
-  include: "{{ item }}"
+  ansible.builtin.include_tasks: "{{ item }}"
   with_fileglob:
     - preflight/*.yml
   tags:
@@ -30,6 +30,7 @@
     - couchbase_rebalance_settings
     - couchbase_notifications
     - couchbase_alerts
+    - couchbase_compaction
     - couchbase_xdcr
     - couchbase_ldap
     - couchbase_users
@@ -37,7 +38,7 @@
     - couchbase_indexes
 
 # Install the OS specific installer in the install/ directory
-- include: "{{ item }}"
+- include_tasks: "{{ item }}"
   with_first_found:
     - "install/{{ ansible_distribution | lower }}-{{ ansible_distribution_version | lower }}.yml"
     - "install/{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version | lower }}.yml"
@@ -56,7 +57,7 @@
     - couchbase_install
     - couchbase_configure
 
-- include: os/disable_thp.yml
+- include_tasks: os/disable_thp.yml
   when: couchbase_os.disable_thp | default(false)
   tags:
     - couchbase_os
@@ -71,27 +72,27 @@
     - couchbase_tunings
     - couchbase_user_limits
 
-- include: os/tunings.yml
+- include_tasks: os/tunings.yml
   when: couchbase_os.kernel_tunings | default(false)
   tags:
     - couchbase_os
     - couchbase_kernel_tunings
 
-- include: os/user_limits.yml
+- include_tasks: os/user_limits.yml
   when: couchbase_os.user_limits | default(false)
   tags:
     - couchbase_os
     - couchbase_user_limits
 
-- include: os/firewalld.yml
+- include_tasks: os/firewalld.yml
   when: couchbase_os.firewalld | default(false)
   tags:
     - couchbase_firewalld
 
 - name: Register a variable to set the master/configuration node
   set_fact:
-    couchbase_master: "{{ inventory_hostname }}"
-  when: couchbase_master is not defined and couchbase_nodes[0].hostname == inventory_hostname
+    couchbase_master: "{{ lookup('vars', couchbase_hostname_var) }}"
+  when: couchbase_master is not defined and couchbase_nodes[0].hostname == lookup('vars', couchbase_hostname_var)
   tags:
     - couchbase_configure
     - couchbase_rebalance
@@ -107,114 +108,130 @@
     - couchbase_rebalance_settings
     - couchbase_notifications
     - couchbase_alerts
+    - couchbase_compaction
     - couchbase_xdcr
     - couchbase_ldap
     - couchbase_users
     - couchbase_user_groups
     - couchbase_indexes
 
-- include: configure/wait_for_nodes.yml
+- include_tasks: configure/wait_for_nodes.yml
   tags:
     - couchbase_configure
     - couchbase_rebalance
 
-- include: configure/initialize_nodes.yml
+- include_tasks: configure/initialize_nodes.yml
   tags:
     - couchbase_configure
     - couchbase_initialize_nodes
 
-- include: configure/initialize_cluster.yml
+- include_tasks: configure/initialize_cluster.yml
   tags:
     - couchbase_configure
     - couchbase_initialize_cluster
 
-- include: configure/audit.yml
+- include_tasks: configure/enforce_cluster_name.yml
+  tags:
+    - couchbase_configure
+    - couchbase_enforce_cluster_name
+
+- include_tasks: configure/audit.yml
   tags:
     - couchbase_configure
     - couchbase_audit
 
-- include: configure/notifications.yml
+- include_tasks: configure/notifications.yml
   tags:
     - couchbase_configure
     - couchbase_notifications
 
-- include: configure/alerts.yml
+- include_tasks: configure/alerts.yml
   tags:
     - couchbase_configure
     - couchbase_alerts
 
-- include: configure/rebalance_settings.yml
+- include_tasks: configure/compaction.yml
+  tags:
+    - couchbase_configure
+    - couchbase_compaction
+
+- include_tasks: configure/rebalance_settings.yml
   tags:
     - couchbase_configure
     - couchbase_rebalance_settings
 
-- include: configure/security_settings.yml
+- include_tasks: configure/security_settings.yml
   tags:
     - couchbase_configure
     - couchbase_security_settings
 
-- include: configure/password_policy.yml
+- include_tasks: configure/password_policy.yml
   tags:
     - couchbase_configure
     - couchbase_password_policy
 
-- include: configure/query_settings.yml
+- include_tasks: configure/query_settings.yml
   tags:
     - couchbase_configure
     - couchbase_query_settings
 
-- include: configure/index_settings.yml
+- include_tasks: configure/index_settings.yml
   tags:
     - couchbase_configure
     - couchbase_index_settings
 
-- include: configure/ldap.yml
+- include_tasks: configure/ldap.yml
   tags:
     - couchbase_configure
     - couchbase_ldap
 
-- include: configure/add_nodes.yml
+- include_tasks: configure/add_nodes.yml
   tags:
     - couchbase_configure
     - couchbase_add_nodes
 
-- include: configure/rebalance.yml
+- include_tasks: configure/wait_for_cluster.yml
   tags:
     - couchbase_configure
     - couchbase_rebalance
 
-- include: configure/server_groups.yml
+- include_tasks: configure/rebalance.yml
+  tags:
+    - couchbase_configure
+    - couchbase_rebalance
+
+- include_tasks: configure/server_groups.yml
   tags:
     - couchbase_configure
     - couchbase_server_groups
 
-- include: configure/buckets.yml
+- include_tasks: configure/buckets.yml
   tags:
     - couchbase_configure
     - couchbase_buckets
 
-- include: configure/sample_buckets.yml
+- include_tasks: configure/sample_buckets.yml
   tags:
     - couchbase_configure
     - couchbase_sample_buckets
 
-- include: configure/autofailover.yml
+- include_tasks: configure/autofailover.yml
   tags:
     - couchbase_configure
     - couchbase_audit
 
-- include: configure/users.yml
+- include_tasks: configure/users.yml
   tags:
     - couchbase_configure
     - couchbase_users
     - couchbase_user_groups
 
-- include: configure/indexes.yml
+- include_tasks: configure/indexes.yml
   tags:
     - couchbase_configure
     - couchbase_indexes
 
-- include: configure/xdcr.yml
+- include_tasks: configure/xdcr.yml
   tags:
     - couchbase_configure
     - couchbase_xdcr

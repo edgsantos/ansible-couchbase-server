@@ -18,7 +18,7 @@
 - name: Fail when the couchbase_audit.log_rotate_interval is not numeric
   fail:
     msg: "The couchbase_audit.log_rotate_interval can only contain numeric values."
-  when: couchbase_audit.log_rotate_interval is defined and couchbase_audit.log_rotate_interval is not number
+  when: couchbase_audit.log_rotate_interval is defined and not (couchbase_audit.log_rotate_interval | string | regex_search('^\d+$'))
   tags:
     - couchbase_configure
     - couchbase_audit
@@ -26,7 +26,7 @@
 - name: Fail when the couchbase_audit.log_rotate_size is not numeric
   fail:
     msg: "The couchbase_audit.log_rotate_size can only contain numeric values."
-  when: couchbase_audit.log_rotate_size is defined and couchbase_audit.log_rotate_size is not number
+  when: couchbase_audit.log_rotate_size is defined and not (couchbase_audit.log_rotate_size | string | regex_search('^\d+$'))
   tags:
     - couchbase_configure
     - couchbase_audit

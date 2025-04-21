@@ -25,7 +25,7 @@
 - name: Fail when the couchbase_memory_quota properties are not numeric
   fail:
     msg: "The couchbase_memory_quotas can only contain numeric properties."
-  when: couchbase_memory_quotas[item] is not number
+  when: couchbase_memory_quotas[item] is defined and not (couchbase_memory_quotas[item] | string | regex_search('^\d+$'))
   with_items: "{{ couchbase_memory_quotas }}"
   tags:
     - couchbase_configure
@@ -40,7 +40,7 @@
 - name: Fail when the couchbase_cluster.port is not numeric
   fail:
     msg: "The couchbase_cluster.port can only contain numeric values."
-  when: couchbase_cluster.port is defined and couchbase_cluster.port is not number
+  when: couchbase_cluster.port is defined and not (couchbase_cluster.port | string | regex_search('^\d+$'))
   tags:
     - couchbase_configure
 

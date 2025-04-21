@@ -1,7 +1,13 @@
 ---
 - name: couchbase_security
   debug:
-    var: couchbase_security
+    msg: "{{ item }} = {{ couchbase_security[item] }}"
+  loop:
+    - disable_http_ui
+    - disable_www_authenticate
+    - cluster_encryption_level
+    - tls_min_version
+    - tls_honor_cipher_order
 
 - name: Check couchbase_security variable types
   assert:

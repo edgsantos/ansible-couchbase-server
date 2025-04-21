@@ -1,11 +1,10 @@
 ---
 # Docs: https://docs.couchbase.com/server/current/cli/cbcli/couchbase-cli-setting-ldap.html
 - name: Configure LDAP
-  no_log: true
   shell:
     cmd: |
       /opt/couchbase/bin/couchbase-cli setting-ldap \
-        --cluster {{ inventory_hostname }} \
+        --cluster {{ couchbase_master }} \
         --username {{ couchbase_security.admin_user | default('Administrator') }} \
         --password '{{ couchbase_security.admin_password | default('password') }}' \
         --hosts '{{ couchbase_ldap.hosts | join(',') }}' \
@@ -49,7 +48,7 @@
           {% endif %}
         {% endif %}
         --request-timeout {{ couchbase_ldap.request_timeout | default(1000) }}
-  when: couchbase_master is defined and couchbase_master == inventory_hostname and couchbase_ldap.hosts | length > 0
+  when: couchbase_master is defined and couchbase_master == lookup('vars', couchbase_hostname_var) and couchbase_ldap.hosts | length > 0
   tags:
     - couchbase_configure
     - couchbase_ldap
